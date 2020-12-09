@@ -4,15 +4,20 @@ import time
 import sys
 import os
 from centroidtracker import CentroidTracker
+from pahoMQTT import MQTT
 import copy
 
 import datetime
 from datetime import timedelta
 
-from sheetsAPI import insertRecord
+from sheetsAPI import SheetsAPI
 
 
 tracker = CentroidTracker(maxDisappeared=20, maxDistance=90)
+mqtt = MQTT("192.168.1.2")
+mqtt.publish("Project/RoomA/Occupancy", 0)
+mqtt.publish("Project/RoomB/Occupancy", 0)
+sheets = SheetsAPI(3)
 
 CONFIDENCE = 0.5
 SCORE_THRESHOLD = 0.5
@@ -24,7 +29,7 @@ labels = open("data/coco.names").read().strip().split("\n")
 
 net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
 
-path_name = "test_videos/20201207_205700.mp4"
+path_name = "test_videos/20201207_092044.mp4"
 cap = cv2.VideoCapture(path_name)
 
 basename = os.path.basename(path_name)
@@ -45,16 +50,12 @@ out = cv2.VideoWriter("output2.mp4", fourcc, video_framerate, (1920, 1080), True
 fps = 0
 frameNo = 0
 
-#rooms = [{"MinX": 1118, "MaxX": 1600, "MinY": 115, "MaxY": 971}, {"MinX": 266, "MaxX": 480, "MinY": 141, "MaxY": 680}] #SCHOOL VIDEO
-rooms = [{"MinX": 1190, "MaxX": 1316, "MinY": 323, "MaxY": 998}, {"MinX": 902, "MaxX": 1043, "MinY": 265, "MaxY": 605}]  #MUSKAAN HOME
+rooms = [{"MinX": 1118, "MaxX": 1600, "MinY": 115, "MaxY": 971}, {"MinX": 266, "MaxX": 480, "MinY": 141, "MaxY": 680}]  # SCHOOL VIDEO
+# rooms = [{"MinX": 1190, "MaxX": 1316, "MinY": 323, "MaxY": 998}, {"MinX": 902, "MaxX": 1043, "MinY": 265, "MaxY": 605}]  #MUSKAAN HOME
 occupancy = [0, 0]
 entry_exit = {}
 
-# cv2.namedWindow('controls')
-# cv2.createTrackbar('MinX','controls',200,1920,lambda x:x)
-# cv2.createTrackbar('MinY','controls',200,1080,lambda x:x)
-# cv2.createTrackbar('MaxX','controls',600,1920,lambda x:x)
-# cv2.createTrackbar('MaxY','controls',600,1080,lambda x:x)
+first = 1
 
 while True:
     start_time = time.time()
@@ -65,6 +66,7 @@ while True:
     # image = cv2.resize(image, (0,0), fx=0.5, fy=0.5)
     h, w = image.shape[:2]
 
+    
     for i, room in enumerate(rooms):
         cv2.rectangle(image, (room["MinX"], room["MinY"]), (room["MaxX"], room["MaxY"]), (255, 0, 0), 3)
 
@@ -78,28 +80,10 @@ while True:
         2,
     )
 
-    # MinX = cv2.getTrackbarPos('MinX','controls')
-    # MinY = cv2.getTrackbarPos('MinY','controls')
-    # MaxX = cv2.getTrackbarPos('MaxX','controls')
-    # MaxY = cv2.getTrackbarPos('MaxY','controls')
-
-    # image = image[MinY:MaxY, MinX:MaxX]
     image_cpy = copy.deepcopy(image)
 
     unique_count = 0
     current_count = 0
-
-    # DwellYLevel = 500
-    # cv2.line(image, (0, DwellYLevel), (1920, DwellYLevel), (255, 128, 0), 2)
-    # cv2.putText(
-    #     image,
-    #     "Dwell Area",
-    #     (w - 250, DwellYLevel + 50),
-    #     cv2.FONT_HERSHEY_SIMPLEX,
-    #     1.5,
-    #     (255, 128, 0),
-    #     1,
-    # )
 
     blob = cv2.dnn.blobFromImage(image_cpy, 1 / 255.0, (416, 416), swapRB=True, crop=False)
     net.setInput(blob)
@@ -186,11 +170,13 @@ while True:
             else:
                 if entry_exit[objectId][0] == 1:
                     occupancy[0] -= 1
-                    insertRecord([str(clock), str(occupancy[0]), str(occupancy[1])])
+                    sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
+                    mqtt.publish("Project/RoomA/Occupancy", occupancy[0])
                     entry_exit[objectId][0] = 0
                 elif entry_exit[objectId][1] == 1:
                     occupancy[1] -= 1
-                    insertRecord([str(clock), str(occupancy[0]), str(occupancy[1])])
+                    sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
+                    mqtt.publish("Project/RoomB/Occupancy", occupancy[1])
                     entry_exit[objectId][1] = 0
 
         ID_text = "Person:" + str(objectId)
@@ -211,12 +197,14 @@ while True:
         if centroidX >= rooms[0]["MinX"] and centroidX <= rooms[0]["MaxX"] and centroidY >= rooms[0]["MinY"] and centroidY <= rooms[0]["MaxY"] and entry_exit[objectID][0] != 1:
             occupancy[0] += 1
             del entry_exit[objectID]
-            insertRecord([str(clock), str(occupancy[0]), str(occupancy[1])])
+            mqtt.publish("Project/RoomA/Occupancy", occupancy[0])
+            sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
             tracker.deleteDereg(objectID)
         elif centroidX >= rooms[1]["MinX"] and centroidX <= rooms[1]["MaxX"] and centroidY >= rooms[1]["MinY"] and centroidY <= rooms[1]["MaxY"] and entry_exit[objectID][1] != 1:
             occupancy[1] += 1
             del entry_exit[objectID]
-            insertRecord([str(clock), str(occupancy[0]), str(occupancy[1])])
+            mqtt.publish("Project/RoomB/Occupancy", occupancy[1])
+            sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
             tracker.deleteDereg(objectID)
         else:
             del entry_exit[objectID]
@@ -277,6 +265,12 @@ while True:
 
     out.write(image)
     cv2.imshow("Application", image)
+
+    if (first):
+        bashCommand = "clear"
+        os.system(bashCommand)
+        first=0
+
 
     key = cv2.waitKey(1)
     if key == ord("q"):
