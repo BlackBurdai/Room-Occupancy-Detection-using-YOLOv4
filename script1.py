@@ -4,7 +4,8 @@ import time
 import sys
 import os
 from centroidtracker import CentroidTracker
-from pahoMQTT import MQTT
+#from pahoMQTT import MQTT
+import paho.mqtt.publish as publish
 import copy
 
 import datetime
@@ -14,10 +15,12 @@ from sheetsAPI import SheetsAPI
 
 
 tracker = CentroidTracker(maxDisappeared=20, maxDistance=90)
-mqtt = MQTT("192.168.1.2")
-mqtt.publish("Project/RoomA/Occupancy", 0)
-mqtt.publish("Project/RoomB/Occupancy", 0)
+# mqtt = MQTT("192.168.1.2")
+# mqtt.publish("Project/RoomA/Occupancy", 0)
+# mqtt.publish("Project/RoomB/Occupancy", 0)
 sheets = SheetsAPI(3)
+
+publish.single("Project/RoomA/Occupancy", 0, hostname="192.168.1.2")
 
 CONFIDENCE = 0.5
 SCORE_THRESHOLD = 0.5
@@ -171,12 +174,12 @@ while True:
                 if entry_exit[objectId][0] == 1:
                     occupancy[0] -= 1
                     sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
-                    mqtt.publish("Project/RoomA/Occupancy", occupancy[0])
+                    publish.single("Project/RoomA/Occupancy", occupancy[0], hostname="192.168.1.2")
                     entry_exit[objectId][0] = 0
                 elif entry_exit[objectId][1] == 1:
                     occupancy[1] -= 1
                     sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
-                    mqtt.publish("Project/RoomB/Occupancy", occupancy[1])
+                    publish.single("Project/RoomB/Occupancy", occupancy[1], hostname="192.168.1.2")
                     entry_exit[objectId][1] = 0
 
         ID_text = "Person:" + str(objectId)
@@ -197,13 +200,13 @@ while True:
         if centroidX >= rooms[0]["MinX"] and centroidX <= rooms[0]["MaxX"] and centroidY >= rooms[0]["MinY"] and centroidY <= rooms[0]["MaxY"] and entry_exit[objectID][0] != 1:
             occupancy[0] += 1
             del entry_exit[objectID]
-            mqtt.publish("Project/RoomA/Occupancy", occupancy[0])
+            publish.single("Project/RoomA/Occupancy", occupancy[0], hostname="192.168.1.2")
             sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
             tracker.deleteDereg(objectID)
         elif centroidX >= rooms[1]["MinX"] and centroidX <= rooms[1]["MaxX"] and centroidY >= rooms[1]["MinY"] and centroidY <= rooms[1]["MaxY"] and entry_exit[objectID][1] != 1:
             occupancy[1] += 1
             del entry_exit[objectID]
-            mqtt.publish("Project/RoomB/Occupancy", occupancy[1])
+            publish.single("Project/RoomB/Occupancy", occupancy[1], hostname="192.168.1.2")
             sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
             tracker.deleteDereg(objectID)
         else:
