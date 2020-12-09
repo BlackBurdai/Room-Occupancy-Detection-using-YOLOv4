@@ -14,6 +14,7 @@ class CentroidTracker:
         self.objects = OrderedDict()
         self.disappeared = OrderedDict()
         self.bbox = OrderedDict()  # CHANGE
+        self.dereg = OrderedDict()
 
         # store the number of maximum consecutive frames a given
         # object is allowed to be marked as "disappeared" until we
@@ -36,10 +37,14 @@ class CentroidTracker:
     def deregister(self, objectID):
         # to deregister an object ID we delete the object ID from
         # both of our respective dictionaries
+        self.dereg[objectID] = self.bbox[objectID]
         del self.objects[objectID]
         del self.disappeared[objectID]
         del self.bbox[objectID]  # CHANGE
-
+        
+    def deleteDereg(self, objectID):
+        del self.dereg[objectID]
+        
     def update(self, rects):
         # check to see if the list of input bounding box rectangles
         # is empty
@@ -58,7 +63,7 @@ class CentroidTracker:
             # return early as there are no centroids or tracking info
             # to update
             # return self.objects
-            return self.bbox
+            return self.bbox, self.dereg
 
         # initialize an array of input centroids for the current frame
         inputCentroids = np.zeros((len(rects), 2), dtype="int")
@@ -168,5 +173,5 @@ class CentroidTracker:
 
         # return the set of trackable objects
         # return self.objects
-        return self.bbox
+        return self.bbox, self.dereg
 
