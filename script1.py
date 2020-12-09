@@ -4,23 +4,28 @@ import time
 import sys
 import os
 from centroidtracker import CentroidTracker
-#from pahoMQTT import MQTT
+
+# from pahoMQTT import MQTT
 import paho.mqtt.publish as publish
 import copy
-
 import datetime
 from datetime import timedelta
-
 from sheetsAPI import SheetsAPI
 
 
 tracker = CentroidTracker(maxDisappeared=20, maxDistance=90)
-# mqtt = MQTT("192.168.1.2")
-# mqtt.publish("Project/RoomA/Occupancy", 0)
-# mqtt.publish("Project/RoomB/Occupancy", 0)
+# mqtt = MQTT(broker_IP)
+# mqtt.publish(topic_A, 0)
+# mqtt.publish(topic_B, 0)
 sheets = SheetsAPI(3)
 
-publish.single("Project/RoomA/Occupancy", 0, hostname="192.168.1.2")
+topic_A = "Project/RoomA/Occupancy"
+topic_B = "Project/RoomB/Occupancy"
+broker_IP = "192.168.1.2"
+
+publish.single(topic_A, 0, hostname=broker_IP)
+publish.single(topic_B, 0, hostname=broker_IP)
+print("[INFO] Initializing topics to 0")
 
 CONFIDENCE = 0.5
 SCORE_THRESHOLD = 0.5
@@ -69,20 +74,11 @@ while True:
     # image = cv2.resize(image, (0,0), fx=0.5, fy=0.5)
     h, w = image.shape[:2]
 
-    
     for i, room in enumerate(rooms):
         cv2.rectangle(image, (room["MinX"], room["MinY"]), (room["MaxX"], room["MaxY"]), (255, 0, 0), 3)
-
-    cv2.putText(
-        image,
-        str(clock)[:-4],
-        (5, 65),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0, 0, 255),
-        2,
-    )
-
+    # fmt: off
+    cv2.putText(image, str(clock)[:-4], (5, 65), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,)
+    # fmt: on
     image_cpy = copy.deepcopy(image)
 
     unique_count = 0
@@ -174,12 +170,14 @@ while True:
                 if entry_exit[objectId][0] == 1:
                     occupancy[0] -= 1
                     sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
-                    publish.single("Project/RoomA/Occupancy", occupancy[0], hostname="192.168.1.2")
+                    publish.single(topic_A, occupancy[0], hostname=broker_IP)
+                    print("[INFO] Publishing " + topic_A + " with " + str(occupancy[0]) + "\n")
                     entry_exit[objectId][0] = 0
                 elif entry_exit[objectId][1] == 1:
                     occupancy[1] -= 1
                     sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
-                    publish.single("Project/RoomB/Occupancy", occupancy[1], hostname="192.168.1.2")
+                    publish.single(topic_B, occupancy[1], hostname=broker_IP)
+                    print("[INFO] Publishing " + topic_B + " with " + str(occupancy[1]) + "\n")
                     entry_exit[objectId][1] = 0
 
         ID_text = "Person:" + str(objectId)
@@ -200,64 +198,35 @@ while True:
         if centroidX >= rooms[0]["MinX"] and centroidX <= rooms[0]["MaxX"] and centroidY >= rooms[0]["MinY"] and centroidY <= rooms[0]["MaxY"] and entry_exit[objectID][0] != 1:
             occupancy[0] += 1
             del entry_exit[objectID]
-            publish.single("Project/RoomA/Occupancy", occupancy[0], hostname="192.168.1.2")
             sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
+            publish.single(topic_A, occupancy[0], hostname=broker_IP)
+            print("[INFO] Publishing " + topic_A + " with " + str(occupancy[0]) + "\n")
             tracker.deleteDereg(objectID)
         elif centroidX >= rooms[1]["MinX"] and centroidX <= rooms[1]["MaxX"] and centroidY >= rooms[1]["MinY"] and centroidY <= rooms[1]["MaxY"] and entry_exit[objectID][1] != 1:
             occupancy[1] += 1
             del entry_exit[objectID]
-            publish.single("Project/RoomB/Occupancy", occupancy[1], hostname="192.168.1.2")
             sheets.insertRecord([str(clock)[:-4], str(occupancy[0]), str(occupancy[1])])
+            publish.single(topic_B, occupancy[1], hostname=broker_IP)
+            print("[INFO] Publishing " + topic_B + " with " + str(occupancy[1]) + "\n")
             tracker.deleteDereg(objectID)
         else:
             del entry_exit[objectID]
             tracker.deleteDereg(objectID)
-
+    # fmt: off
     total_count += unique_count
+
     total_count_text = "Total Count:" + str(total_count)
-    cv2.putText(
-        image,
-        total_count_text,
-        (5, 500),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0, 0, 255),
-        2,
-    )
+    cv2.putText(image, total_count_text, (5, 500), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,)
 
     current_count_text = "Current Count:" + str(current_count)
-    cv2.putText(
-        image,
-        current_count_text,
-        (5, 535),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0, 0, 255),
-        2,
-    )
+    cv2.putText(image, current_count_text, (5, 535), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2,)
 
     occupancy1_text = "Room A: " + str(occupancy[0])
-    cv2.putText(
-        image,
-        occupancy1_text,
-        (rooms[0]["MinX"], rooms[0]["MinY"]),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1.5,
-        (0, 0, 255),
-        2,
-    )
-
+    cv2.putText(image, occupancy1_text, (rooms[0]["MinX"], rooms[0]["MinY"]), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2,)
+    
     occupancy2_text = "Room B: " + str(occupancy[1])
-    cv2.putText(
-        image,
-        occupancy2_text,
-        (rooms[1]["MinX"], rooms[1]["MinY"]),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1.5,
-        (0, 0, 255),
-        2,
-    )
-
+    cv2.putText(image, occupancy2_text, (rooms[1]["MinX"], rooms[1]["MinY"]), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 2,)
+    # fmt: on
     end_time = time.time()
     frame_time = end_time - start_time
     fps = 1 / frame_time
@@ -269,11 +238,10 @@ while True:
     out.write(image)
     cv2.imshow("Application", image)
 
-    if (first):
+    if first:
         bashCommand = "clear"
         os.system(bashCommand)
-        first=0
-
+        first = 0
 
     key = cv2.waitKey(1)
     if key == ord("q"):
