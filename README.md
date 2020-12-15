@@ -9,8 +9,8 @@ This uses YOLOv4 to detect occupancy in a room and counts the number of people.
 
 ## Main logic behind occupancy detection
 
-![LOGIC](https://github.com/sakshamprakash01/Room-Occupancy-Detection-using-YOLOv4/blob/main/occupancy.png?raw=true)
+![Logic Behind occupancy detection](https://github.com/sakshamprakash01/Room-Occupancy-Detection-using-YOLOv4/blob/main/occupancy.png?raw=true)
 
 ## Video Demonstration
 
-[![Watch the video](https://img.youtube.com/vi/c89ByrbQ5dA/maxresdefault.jpg)](https://www.youtube.com/watch?v=c89ByrbQ5dA)
+[![Watch the video here!](https://img.youtube.com/vi/c89ByrbQ5dA/maxresdefault.jpg)](https://www.youtube.com/watch?v=c89ByrbQ5dA)
